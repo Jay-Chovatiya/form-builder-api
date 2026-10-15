@@ -1,8 +1,10 @@
-package com.dynamicform.api.modules.user.domain;
+package com.dynamicform.api.entity;
 
 import com.dynamicform.api.common.audit.BaseAuditableEntity;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,36 +14,32 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class UserEntity extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "Id")
     private Long id;
 
-    @Column(name = "username", nullable = false, unique = true, length = 100)
+    @Column(name = "Username", nullable = false, unique = true, length = 100)
     private String username;
 
-    @Column(name = "email", nullable = false, unique = true, length = 150)
+    @Column(name = "Email", nullable = false, unique = true, length = 150)
     private String email;
 
-    @Column(name = "password_hash", nullable = false)
+    @Column(name = "PasswordHash", nullable = false)
     private String passwordHash;
 
-    @Column(name = "full_name", length = 150)
+    @Column(name = "FullName", length = 150)
     private String fullName;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, length = 50)
-    @Builder.Default
+    @Column(name = "Role", nullable = false, length = 50)
     private Role role = Role.ADMIN;
 
-    @Column(name = "is_active", nullable = false)
-    @Builder.Default
-    private boolean active = true;
+    @Column(name = "IsActive", nullable = false)
+    private boolean isActive = true;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    @Builder.Default
     private List<RefreshTokenEntity> refreshTokens = new ArrayList<>();
 }

@@ -1,7 +1,9 @@
-package com.dynamicform.api.modules.user.domain;
+package com.dynamicform.api.entity;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 
@@ -10,32 +12,30 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class RefreshTokenEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "Id")
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @JoinColumn(name = "UserId", nullable = false)
     private UserEntity user;
 
-    @Column(name = "token_hash", nullable = false, length = 255)
+    @Column(name = "TokenHash", nullable = false, length = 255)
     private String tokenHash;
 
-    @Column(name = "created_at", nullable = false)
-    @Builder.Default
+    @Column(name = "CreatedAt", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    @Column(name = "expires_at", nullable = false)
+    @Column(name = "ExpiresAt", nullable = false)
     private LocalDateTime expiresAt;
 
-    @Column(name = "revoked_at")
+    @Column(name = "RevokedAt")
     private LocalDateTime revokedAt;
 
-    @Column(name = "replaced_by_token_id")
+    @Column(name = "ReplacedByTokenId")
     private Long replacedByTokenId;
 
     public boolean isExpired() {

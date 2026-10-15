@@ -18,10 +18,10 @@ import java.time.LocalDateTime;
 public abstract class BaseAuditableEntity {
 
     @CreatedDate
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(name = "CreatedAt", nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @LastModifiedDate
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "UpdatedAt", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
 }

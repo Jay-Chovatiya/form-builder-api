@@ -1,24 +1,38 @@
-package com.dynamicform.api.service.Impl;
+package com.dynamicform.api.service.impl;
 
+import com.dynamicform.api.common.exception.BadRequestException;
 import com.dynamicform.api.dto.*;
+import com.dynamicform.api.entity.FormEntity;
 import com.dynamicform.api.mapper.FormMapper;
 import com.dynamicform.api.repository.FormRepository;
+import com.dynamicform.api.repository.FormSubmissionRepository;
 import com.dynamicform.api.service.FormService;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 
 @Service
-@AllArgsConstructor 
+@RequiredArgsConstructor 
 public class FormServiceImpl implements FormService {
 
     private final FormRepository formRepository;
+    private final FormSubmissionRepository formSubmissionRepository;
     private final FormMapper formMapper;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FormDto> getForms() {
+        return formRepository.findAll().stream()
+                .map(formMapper::toDto)
+                .map(dto -> processDetails(dto, false))
+                .toList();
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -40,6 +54,23 @@ public class FormServiceImpl implements FormService {
         return formRepository.findByCode(code)
                 .map(formMapper::toDto)
                 .map(dto -> processDetails(dto, includeDeleted));
+    }
+
+    @Override
+    @Transactional
+    public boolean deleteForm(Long id) {
+        Optional<FormEntity> entity = formRepository.findById(id);
+        if (entity.isEmpty()) {
+            return false;
+        }
+
+        boolean isSubmissionPresent = formSubmissionRepository.existsByFormId(id);
+        if (isSubmissionPresent) {
+            throw new BadRequestException("Cannot delete this form because it contains submissions. Please delete all form submissions before deleting the form.");
+        }
+
+        formRepository.delete(entity.get());
+        return true;
     }
 
 

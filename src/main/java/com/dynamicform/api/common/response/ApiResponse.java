@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 public class ApiResponse<T> {
 
     @Builder.Default
-    private boolean success = true;
+    private int statusCode = 200;
+
 
     private String message;
 
@@ -25,7 +26,7 @@ public class ApiResponse<T> {
 
     public static <T> ApiResponse<T> ok(T data, String message) {
         return ApiResponse.<T>builder()
-                .success(true)
+                .statusCode(200)
                 .message(message)
                 .data(data)
                 .timestamp(LocalDateTime.now())
@@ -38,5 +39,23 @@ public class ApiResponse<T> {
 
     public static <T> ApiResponse<T> success(String message) {
         return ok(null, message);
+    }
+
+    public static <T> ApiResponse<T> error(int statusCode, String message) {
+        return ApiResponse.<T>builder()
+                .statusCode(statusCode)
+                .message(message)
+                .data(null)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public static <T> ApiResponse<T> of(int statusCode, String message, T data) {
+        return ApiResponse.<T>builder()
+                .statusCode(statusCode)
+                .message(message)
+                .data(data)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 }

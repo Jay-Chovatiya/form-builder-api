@@ -35,7 +35,7 @@ public class UserEntity extends BaseAuditableEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "Role", nullable = false, length = 50)
-    private Role role = Role.ADMIN;
+    private Role role = Role.Administrator;
 
     @Column(name = "IsActive", nullable = false)
     private boolean isActive = true;

@@ -1,6 +1,8 @@
 package com.dynamicform.api.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -12,6 +14,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class RefreshTokenEntity {
 
     @Id
@@ -26,6 +30,7 @@ public class RefreshTokenEntity {
     @Column(name = "TokenHash", nullable = false, length = 255)
     private String tokenHash;
 
+    @Builder.Default
     @Column(name = "CreatedAt", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 

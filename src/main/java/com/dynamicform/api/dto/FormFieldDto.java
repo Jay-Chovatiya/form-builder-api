@@ -1,5 +1,6 @@
 package com.dynamicform.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -53,6 +54,7 @@ public class FormFieldDto {
     @Min(value = 0, message = "Max size in bytes must be zero or positive")
     private long maxSizeInBytes;
 
+    @JsonProperty("isDeleted")
     private boolean isDeleted;
 
     @Valid

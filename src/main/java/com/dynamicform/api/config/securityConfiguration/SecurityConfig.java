@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -45,8 +46,10 @@ public class SecurityConfig {
                                     "{\"statusCode\":401,\"message\":\"Unauthorized: Access token expired or invalid\"}");
                         }))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/forms/code/{code}").permitAll()
-                        .requestMatchers("/api/forms").hasAnyRole(Role.Administrator.name(), Role.SuperAdministrator.name())
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/forms/code/**").permitAll()
+                        .requestMatchers("/api/users/**").hasRole(Role.SuperAdministrator.name())
+                        .requestMatchers("/api/forms/**").hasAnyRole(Role.Administrator.name(), Role.SuperAdministrator.name())
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -25,6 +25,9 @@ class FormBuilderApiApplicationTests {
 	@Autowired
 	private com.dynamicform.api.service.AuthService authService;
 
+	@Autowired
+	private com.dynamicform.api.service.UserService userService;
+
 	@Test
 	void contextLoads() {
 		List<com.dynamicform.api.entity.UserEntity> users = userRepository.findAll();
@@ -151,5 +154,118 @@ class FormBuilderApiApplicationTests {
 		org.junit.jupiter.api.Assertions.assertFalse(authService.revokeToken(null));
 		org.junit.jupiter.api.Assertions.assertFalse(authService.revokeToken(""));
 		org.junit.jupiter.api.Assertions.assertFalse(authService.revokeToken("non_existent_token"));
+	}
+
+	@Test
+	void testUserLifecycle() {
+		String testUsername = "test_user_" + System.currentTimeMillis();
+		String testEmail = testUsername + "@formstudio.com";
+
+		com.dynamicform.api.dto.UserDto dto = new com.dynamicform.api.dto.UserDto();
+		dto.setUsername(testUsername);
+		dto.setEmail(testEmail);
+		dto.setPassword("Secret@123");
+		dto.setFullName("Test User");
+		dto.setRole(com.dynamicform.api.entity.Role.Administrator);
+		dto.setActive(true);
+
+		// 1. Create
+		com.dynamicform.api.dto.UserDto created = userService.createUser(dto);
+		org.junit.jupiter.api.Assertions.assertNotNull(created.getId());
+		org.junit.jupiter.api.Assertions.assertEquals(testUsername, created.getUsername());
+		org.junit.jupiter.api.Assertions.assertEquals(testEmail, created.getEmail());
+
+		// 2. Uniqueness check
+		org.junit.jupiter.api.Assertions.assertFalse(userService.isUsernameUnique(testUsername, null));
+		org.junit.jupiter.api.Assertions.assertTrue(userService.isUsernameUnique(testUsername, created.getId()));
+		org.junit.jupiter.api.Assertions.assertFalse(userService.isEmailUnique(testEmail, null));
+		org.junit.jupiter.api.Assertions.assertTrue(userService.isEmailUnique(testEmail, created.getId()));
+
+		// 3. Update
+		dto.setFullName("Updated Test User");
+		dto.setPassword(""); // keep existing password
+		Optional<com.dynamicform.api.dto.UserDto> updatedOpt = userService.updateUser(created.getId(), dto);
+		org.junit.jupiter.api.Assertions.assertTrue(updatedOpt.isPresent());
+		org.junit.jupiter.api.Assertions.assertEquals("Updated Test User", updatedOpt.get().getFullName());
+
+		// 4. Toggle Status
+		boolean toggled = userService.toggleUserStatus(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(toggled);
+		Optional<com.dynamicform.api.dto.UserDto> toggledUser = userService.getUserById(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(toggledUser.isPresent());
+		org.junit.jupiter.api.Assertions.assertFalse(toggledUser.get().isActive());
+
+		// 5. Delete
+		boolean deleted = userService.deleteUser(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(deleted);
+		org.junit.jupiter.api.Assertions.assertTrue(userService.getUserById(created.getId()).isEmpty());
+	}
+
+	@Test
+	void testFormLifecycle() {
+		String code = "TEST_CODE_" + System.currentTimeMillis();
+
+		FormDto dto = new FormDto();
+		dto.setName("Customer Feedback");
+		dto.setCode(code);
+		dto.setDescription("Testing form creation and updates");
+		dto.setStatus(com.dynamicform.api.entity.FormStatus.Draft);
+
+		// Section
+		com.dynamicform.api.dto.FormSectionDto section = new com.dynamicform.api.dto.FormSectionDto();
+		section.setTitle("General Info");
+		section.setDisplayOrder(0);
+
+		// Field with option
+		com.dynamicform.api.dto.FormFieldDto field = new com.dynamicform.api.dto.FormFieldDto();
+		field.setName("satisfaction_level");
+		field.setType("select");
+		field.setLabel("Satisfaction Level");
+		field.setDisplayOrder(0);
+
+		com.dynamicform.api.dto.FieldOptionDto opt1 = new com.dynamicform.api.dto.FieldOptionDto();
+		opt1.setLabel("High");
+		opt1.setValue("high");
+		opt1.setDisplayOrder(0);
+		field.getOptions().add(opt1);
+
+		section.getFields().add(field);
+		dto.getSections().add(section);
+
+		// 1. Create Form
+		FormDto created = formService.createForm(dto);
+		org.junit.jupiter.api.Assertions.assertNotNull(created.getId());
+		org.junit.jupiter.api.Assertions.assertEquals(code, created.getCode());
+		org.junit.jupiter.api.Assertions.assertFalse(created.getSections().isEmpty());
+		org.junit.jupiter.api.Assertions.assertFalse(created.getSections().get(0).getFields().isEmpty());
+
+		// 2. Code check
+		org.junit.jupiter.api.Assertions.assertFalse(formService.isFormCodeUnique(code, null));
+		org.junit.jupiter.api.Assertions.assertTrue(formService.isFormCodeUnique(code, created.getId()));
+
+		// 3. Status updates: Publish / Unpublish
+		Optional<FormDto> published = formService.publishForm(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(published.isPresent());
+		org.junit.jupiter.api.Assertions.assertEquals(com.dynamicform.api.entity.FormStatus.Published, published.get().getStatus());
+
+		Optional<FormDto> publishedByCode = formService.getPublishedFormByCode(code);
+		org.junit.jupiter.api.Assertions.assertTrue(publishedByCode.isPresent());
+
+		Optional<FormDto> unpublished = formService.unpublishForm(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(unpublished.isPresent());
+		org.junit.jupiter.api.Assertions.assertEquals(com.dynamicform.api.entity.FormStatus.Unpublished, unpublished.get().getStatus());
+		org.junit.jupiter.api.Assertions.assertTrue(formService.getPublishedFormByCode(code).isEmpty());
+
+		// 4. Duplicate Form
+		Optional<FormDto> duplicated = formService.duplicateForm(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(duplicated.isPresent());
+		org.junit.jupiter.api.Assertions.assertEquals(created.getName() + " (Copy)", duplicated.get().getName());
+		org.junit.jupiter.api.Assertions.assertEquals(com.dynamicform.api.entity.FormStatus.Draft, duplicated.get().getStatus());
+
+		// 5. Clean up forms
+		boolean deletedSource = formService.deleteForm(created.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(deletedSource);
+		boolean deletedCopy = formService.deleteForm(duplicated.get().getId());
+		org.junit.jupiter.api.Assertions.assertTrue(deletedCopy);
 	}
 }

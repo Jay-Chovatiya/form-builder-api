@@ -37,7 +37,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public Optional<AuthResponseDto> login(LoginDto dto) {
         String identifier = dto.getUsernameOrEmail() != null ? dto.getUsernameOrEmail().trim() : "";
-        UserEntity user = userRepository.findByUserNameOrEmail(identifier).orElse(null);
+        UserEntity user = userRepository.findByUsernameOrEmail(identifier).orElse(null);
         if (user == null || !user.isActive()) {
             return Optional.empty();
         }

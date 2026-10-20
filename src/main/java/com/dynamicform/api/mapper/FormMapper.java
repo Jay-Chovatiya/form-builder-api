@@ -1,25 +1,28 @@
 package com.dynamicform.api.mapper;
 
-import com.dynamicform.api.dto.*;
-import com.dynamicform.api.entity.*;
+import com.dynamicform.api.dto.FormDto;
+import com.dynamicform.api.entity.FormEntity;
+import org.mapstruct.AfterMapping;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.ReportingPolicy;
 
-import java.util.List;
+@Mapper(componentModel = "spring", uses = {FormSectionMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+public interface FormMapper extends BaseMapper<FormDto, FormEntity> {
 
-@Mapper(componentModel = "spring")
-public interface FormMapper {
+    @Override
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "sections", ignore = true)
+    @Mapping(target = "submissions", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    void updateEntityFromDto(FormDto dto, @MappingTarget FormEntity entity);
 
-    FormDto toDto(FormEntity entity);
-
-    List<FormDto> toDtoList(List<FormEntity> entities);
-
-    FormSectionDto toDto(FormSectionEntity entity);
-
-    FormFieldDto toDto(FormFieldEntity entity);
-
-    FieldOptionDto toDto(FieldOptionEntity entity);
-
-    FieldValidationDto toDto(FieldValidationEntity entity);
-
-    FileTypeConfigDto toDto(FileTypeConfigEntity entity);
+    @AfterMapping
+    default void linkChildren(@MappingTarget FormEntity form) {
+        if (form.getSections() != null) {
+            form.getSections().forEach(s -> s.setForm(form));
+        }
+    }
 }

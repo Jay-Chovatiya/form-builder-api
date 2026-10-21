@@ -264,14 +264,11 @@ public class FormServiceImpl implements FormService {
                         .collect(Collectors.toSet())
                 : Collections.emptySet();
 
-        for (FormSectionEntity sec : existing.getSections()) {
-            if (!updatedSectionIds.contains(sec.getId())) {
-                sec.setDeleted(true);
-                for (FormFieldEntity f : sec.getFields()) {
-                    f.setDeleted(true);
-                }
-            }
-        }
+        existing.getSections().forEach(sec -> {
+            boolean keep = updatedSectionIds.contains(sec.getId());
+            sec.setDeleted(!keep);
+            sec.getFields().forEach(f -> f.setDeleted(!keep));
+        });
 
         if (dto.getSections() != null) {
             for (FormSectionDto sectionDto : dto.getSections()) {
@@ -421,15 +418,15 @@ public class FormServiceImpl implements FormService {
                 ? updatedAllowedTypes.stream()
                         .map(FileTypeConfigDto::getExtension)
                         .filter(Objects::nonNull)
-                        .map(FileTypeConfigMapper::normalizeExtension)
+                        .map(this::normalizeExtension)
                         .collect(Collectors.toSet())
                 : Collections.emptySet();
 
-        existingField.getAllowedTypes().removeIf(t -> !updatedExtensions.contains(FileTypeConfigMapper.normalizeExtension(t.getExtension())));
+        existingField.getAllowedTypes().removeIf(t -> !updatedExtensions.contains(normalizeExtension(t.getExtension())));
 
         if (updatedAllowedTypes != null) {
             for (FileTypeConfigDto tDto : updatedAllowedTypes) {
-                String normExt = FileTypeConfigMapper.normalizeExtension(tDto.getExtension());
+                String normExt = normalizeExtension(tDto.getExtension());
                 FileTypeConfigEntity existingType = existingField.getAllowedTypes().stream()
                         .filter(t -> Objects.equals(t.getExtension(), normExt))
                         .findFirst().orElse(null);
@@ -444,5 +441,11 @@ public class FormServiceImpl implements FormService {
                 }
             }
         }
+    }
+
+    private String normalizeExtension(String ext) {
+        if (ext == null || ext.isBlank()) return "";
+        String clean = ext.trim().toLowerCase();
+        return clean.startsWith(".") ? clean : "." + clean;
     }
 }

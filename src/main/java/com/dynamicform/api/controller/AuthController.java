@@ -30,6 +30,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtProperties jwtProperties;
+    private final String REFRESH_COOKIE_NAME = "refreshToken";
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponseDto>> login(
@@ -48,7 +49,7 @@ public class AuthController {
 
     @PostMapping("/refresh-token")
     public ResponseEntity<ApiResponse<AuthResponseDto>> refreshToken(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = REFRESH_COOKIE_NAME, required = false) String refreshToken,
             HttpServletResponse httpServletResponse) {
 
         if (refreshToken == null || refreshToken.isBlank()) {
@@ -74,7 +75,7 @@ public class AuthController {
 
     @PostMapping("/revoke-token")
     public ResponseEntity<ApiResponse<Void>> revokeToken(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            @CookieValue(name = REFRESH_COOKIE_NAME, required = false) String refreshToken,
             HttpServletResponse httpServletResponse) {
 
         if (refreshToken != null && !refreshToken.isBlank()) {
@@ -90,7 +91,7 @@ public class AuthController {
                 ? jwtProperties.getRefreshExpirationMs() * 7
                 : jwtProperties.getRefreshExpirationMs();
 
-        ResponseCookie refreshCookie = ResponseCookie.from("refreshToken", refreshToken)
+        ResponseCookie refreshCookie = ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
                 .httpOnly(true)
                 .path("/")
                 .maxAge(Duration.ofMillis(maxAgeMs))
@@ -100,7 +101,7 @@ public class AuthController {
     }
 
     private void deleteRefreshTokenCookie(HttpServletResponse response) {
-        ResponseCookie clearCookie = ResponseCookie.from("refreshToken", "")
+        ResponseCookie clearCookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
                 .httpOnly(true)
                 .path("/")
                 .maxAge(Duration.ZERO)

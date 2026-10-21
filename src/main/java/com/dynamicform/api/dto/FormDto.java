@@ -10,6 +10,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,7 +30,8 @@ public class FormDto {
     @Size(max = 100, message = "Form code must not exceed 100 characters")
     @Pattern(regexp = "^[a-zA-Z0-9_-]+$", message = "Form code must contain only letters, numbers, hyphens, and underscores")
     private String code;
-
+    
+    @NotBlank(message = "Form description is required")
     private String description;
 
     @Size(max = 100, message = "Category must not exceed 100 characters")
@@ -38,9 +40,9 @@ public class FormDto {
     @NotNull(message = "Form status is required")
     private FormStatus status = FormStatus.Draft;
 
-    private LocalDateTime startDate;
+    private LocalDate startDate;
 
-    private LocalDateTime endDate;
+    private LocalDate endDate;
 
     private boolean allowMultipleSubmissions;
 
@@ -49,8 +51,10 @@ public class FormDto {
     private String confirmationMessage;
 
     @Size(max = 50, message = "Submit button text must not exceed 50 characters")
+    @NotBlank(message = "Submit butten text is required")
     private String submitButtonText;
 
+    @NotBlank(message = "Cancel butten text is required")
     @Size(max = 50, message = "Cancel button text must not exceed 50 characters")
     private String cancelButtonText;
 

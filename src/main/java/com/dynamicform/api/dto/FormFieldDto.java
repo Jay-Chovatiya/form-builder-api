@@ -1,9 +1,11 @@
 package com.dynamicform.api.dto;
 
+import com.dynamicform.api.common.validation.FormFieldValid;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -15,12 +17,14 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
+@FormFieldValid 
 public class FormFieldDto {
 
     private Long id;
 
     @NotBlank(message = "Field name is required")
     @Size(max = 100, message = "Field name must not exceed 100 characters")
+    @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_]*$", message="Field name must start with a letter and contain only letters, numbers, or underscores.")
     private String name;
 
     @NotBlank(message = "Field type is required")
@@ -38,6 +42,7 @@ public class FormFieldDto {
     @Size(max = 255, message = "Placeholder must not exceed 255 characters")
     private String placeholder;
 
+    @JsonProperty("default")
     private String defaultValue;
 
     @Size(max = 100, message = "Icon must not exceed 100 characters")

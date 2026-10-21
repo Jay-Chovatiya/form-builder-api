@@ -48,6 +48,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/forms/code/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/forms/code/**").permitAll()
                         .requestMatchers("/api/users/**").hasRole(Role.SuperAdministrator.name())
                         .requestMatchers("/api/forms/**").hasAnyRole(Role.Administrator.name(), Role.SuperAdministrator.name())
                         .anyRequest().authenticated())

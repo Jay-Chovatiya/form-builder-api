@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,10 +39,10 @@ public class FormEntity extends BaseAuditableEntity {
     private FormStatus status = FormStatus.Draft;
 
     @Column(name = "StartDate")
-    private LocalDateTime startDate;
+    private LocalDate startDate;
 
     @Column(name = "EndDate")
-    private LocalDateTime endDate;
+    private LocalDate endDate;
 
     @Column(name = "AllowMultipleSubmissions", nullable = false)
     private boolean allowMultipleSubmissions = true;

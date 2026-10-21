@@ -28,6 +28,9 @@ class FormBuilderApiApplicationTests {
 	@Autowired
 	private com.dynamicform.api.service.UserService userService;
 
+	@Autowired
+	private com.dynamicform.api.service.SubmissionService submissionService;
+
 	@Test
 	void contextLoads() {
 		List<com.dynamicform.api.entity.UserEntity> users = userRepository.findAll();
@@ -267,5 +270,215 @@ class FormBuilderApiApplicationTests {
 		org.junit.jupiter.api.Assertions.assertTrue(deletedSource);
 		boolean deletedCopy = formService.deleteForm(duplicated.get().getId());
 		org.junit.jupiter.api.Assertions.assertTrue(deletedCopy);
+	}
+
+	@Test
+	void testFileTypeConfigValidation() {
+		jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory();
+		jakarta.validation.Validator validator = factory.getValidator();
+
+		// Invalid: MIME type starting with dot
+		com.dynamicform.api.dto.FileTypeConfigDto invalidMime = new com.dynamicform.api.dto.FileTypeConfigDto();
+		invalidMime.setExtension(".doc");
+		invalidMime.setMimeType(".application/msword");
+		var violations = validator.validate(invalidMime);
+		org.junit.jupiter.api.Assertions.assertFalse(violations.isEmpty());
+		org.junit.jupiter.api.Assertions.assertTrue(violations.stream()
+				.anyMatch(v -> v.getPropertyPath().toString().equals("mimeType")));
+
+		// Invalid: Extension without leading dot
+		com.dynamicform.api.dto.FileTypeConfigDto invalidExt = new com.dynamicform.api.dto.FileTypeConfigDto();
+		invalidExt.setExtension("doc");
+		invalidExt.setMimeType("application/msword");
+		violations = validator.validate(invalidExt);
+		org.junit.jupiter.api.Assertions.assertFalse(violations.isEmpty());
+		org.junit.jupiter.api.Assertions.assertTrue(violations.stream()
+				.anyMatch(v -> v.getPropertyPath().toString().equals("extension")));
+
+		// Valid: correct extension and mime type
+		com.dynamicform.api.dto.FileTypeConfigDto valid = new com.dynamicform.api.dto.FileTypeConfigDto();
+		valid.setExtension(".doc");
+		valid.setMimeType("application/msword");
+		violations = validator.validate(valid);
+		org.junit.jupiter.api.Assertions.assertTrue(violations.isEmpty());
+	}
+
+	@Test
+	void testFormFieldValidationRulesConsistency() {
+		jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory();
+		jakarta.validation.Validator validator = factory.getValidator();
+
+		// Invalid: minLength > maxLength
+		com.dynamicform.api.dto.FormFieldDto invalidLength = new com.dynamicform.api.dto.FormFieldDto();
+		invalidLength.setName("testField");
+		invalidLength.setType("Text");
+		invalidLength.setLabel("Test Field");
+		invalidLength.setValidations(java.util.List.of(
+				new com.dynamicform.api.dto.FieldValidationDto("minLength", "7"),
+				new com.dynamicform.api.dto.FieldValidationDto("maxLength", "5")
+		));
+
+		var violations = validator.validate(invalidLength);
+		org.junit.jupiter.api.Assertions.assertFalse(violations.isEmpty());
+		org.junit.jupiter.api.Assertions.assertTrue(violations.stream()
+				.anyMatch(v -> v.getMessage().contains("Minimum length (7) cannot be greater than maximum length (5)")));
+
+		// Invalid: minValue > maxValue
+		com.dynamicform.api.dto.FormFieldDto invalidValue = new com.dynamicform.api.dto.FormFieldDto();
+		invalidValue.setName("numberField");
+		invalidValue.setType("Number");
+		invalidValue.setLabel("Number Field");
+		invalidValue.setValidations(java.util.List.of(
+				new com.dynamicform.api.dto.FieldValidationDto("minValue", "100"),
+				new com.dynamicform.api.dto.FieldValidationDto("maxValue", "50")
+		));
+
+		violations = validator.validate(invalidValue);
+		org.junit.jupiter.api.Assertions.assertFalse(violations.isEmpty());
+		org.junit.jupiter.api.Assertions.assertTrue(violations.stream()
+				.anyMatch(v -> v.getMessage().contains("Minimum value (100.0) cannot be greater than maximum value (50.0)")));
+
+		// Valid: minLength <= maxLength
+		com.dynamicform.api.dto.FormFieldDto validField = new com.dynamicform.api.dto.FormFieldDto();
+		validField.setName("validField");
+		validField.setType("Text");
+		validField.setLabel("Valid Field");
+		validField.setValidations(java.util.List.of(
+				new com.dynamicform.api.dto.FieldValidationDto("minLength", "3"),
+				new com.dynamicform.api.dto.FieldValidationDto("maxLength", "10")
+		));
+
+		violations = validator.validate(validField);
+		org.junit.jupiter.api.Assertions.assertTrue(violations.isEmpty());
+	}
+
+	@Test
+	void testFormSubmissionLifecycleAndValidations() {
+		// 1. Create a published form with diverse fields
+		String code = "submit_test_" + System.currentTimeMillis();
+		com.dynamicform.api.dto.FormDto form = new com.dynamicform.api.dto.FormDto();
+		form.setName("Submission Test Form");
+		form.setCode(code);
+		form.setDescription("Form to test submission handling");
+		form.setStatus(com.dynamicform.api.entity.FormStatus.Draft);
+
+		com.dynamicform.api.dto.FormSectionDto sec = new com.dynamicform.api.dto.FormSectionDto();
+		sec.setTitle("Personal Info");
+
+		com.dynamicform.api.dto.FormFieldDto nameField = new com.dynamicform.api.dto.FormFieldDto();
+		nameField.setName("fullName");
+		nameField.setType("Text");
+		nameField.setLabel("Full Name");
+		nameField.setValidations(java.util.List.of(
+				new com.dynamicform.api.dto.FieldValidationDto("required", "true")
+		));
+
+		com.dynamicform.api.dto.FormFieldDto ageField = new com.dynamicform.api.dto.FormFieldDto();
+		ageField.setName("age");
+		ageField.setType("Number");
+		ageField.setLabel("Age");
+		ageField.setValidations(java.util.List.of(
+				new com.dynamicform.api.dto.FieldValidationDto("minValue", "18"),
+				new com.dynamicform.api.dto.FieldValidationDto("maxValue", "65")
+		));
+
+		com.dynamicform.api.dto.FormFieldDto cityField = new com.dynamicform.api.dto.FormFieldDto();
+		cityField.setName("city");
+		cityField.setType("Dropdown");
+		cityField.setLabel("City");
+		cityField.setOptions(java.util.List.of(
+				new com.dynamicform.api.dto.FieldOptionDto(null, "New York", "NYC", 1),
+				new com.dynamicform.api.dto.FieldOptionDto(null, "Los Angeles", "LA", 2)
+		));
+
+		sec.setFields(new java.util.ArrayList<>(java.util.List.of(nameField, ageField, cityField)));
+		form.setSections(new java.util.ArrayList<>(java.util.List.of(sec)));
+
+		com.dynamicform.api.dto.FormDto createdForm = formService.createForm(form);
+		org.junit.jupiter.api.Assertions.assertNotNull(createdForm.getId());
+
+		// 2. Draft form cannot accept submissions
+		com.dynamicform.api.dto.FormSubmissionDto subDto = new com.dynamicform.api.dto.FormSubmissionDto();
+		org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.ResourceNotFoundException.class,
+				() -> submissionService.saveSubmission(code, subDto)
+		);
+
+		// Publish form
+		formService.publishForm(createdForm.getId());
+
+		// Fetch field IDs from created form
+		com.dynamicform.api.dto.FormDto published = formService.getFormWithDetails(createdForm.getId(), false).orElseThrow();
+		var fields = published.getSections().get(0).getFields();
+		Long nameId = fields.stream().filter(f -> f.getName().equals("fullName")).findFirst().get().getId();
+		Long ageId = fields.stream().filter(f -> f.getName().equals("age")).findFirst().get().getId();
+		Long cityId = fields.stream().filter(f -> f.getName().equals("city")).findFirst().get().getId();
+
+		// 3. Required field validation error
+		com.dynamicform.api.dto.FormSubmissionDto missingReq = new com.dynamicform.api.dto.FormSubmissionDto();
+		missingReq.setResponses(java.util.List.of(
+				new com.dynamicform.api.dto.FormResponseDto(ageId, 25),
+				new com.dynamicform.api.dto.FormResponseDto(cityId, "NYC")
+		));
+		var exReq = org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.BadRequestException.class,
+				() -> submissionService.saveSubmission(code, missingReq)
+		);
+		org.junit.jupiter.api.Assertions.assertTrue(exReq.getMessage().contains("Field 'Full Name' is required"));
+
+		// 4. Number bounds validation error (age < 18)
+		com.dynamicform.api.dto.FormSubmissionDto underAge = new com.dynamicform.api.dto.FormSubmissionDto();
+		underAge.setResponses(java.util.List.of(
+				new com.dynamicform.api.dto.FormResponseDto(nameId, "John Doe"),
+				new com.dynamicform.api.dto.FormResponseDto(ageId, 16),
+				new com.dynamicform.api.dto.FormResponseDto(cityId, "NYC")
+		));
+		var exAge = org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.BadRequestException.class,
+				() -> submissionService.saveSubmission(code, underAge)
+		);
+		org.junit.jupiter.api.Assertions.assertTrue(exAge.getMessage().contains("Field 'Age' must be at least 18.0"));
+
+		// 5. Option choice validation error (invalid city)
+		com.dynamicform.api.dto.FormSubmissionDto badCity = new com.dynamicform.api.dto.FormSubmissionDto();
+		badCity.setResponses(java.util.List.of(
+				new com.dynamicform.api.dto.FormResponseDto(nameId, "John Doe"),
+				new com.dynamicform.api.dto.FormResponseDto(ageId, 25),
+				new com.dynamicform.api.dto.FormResponseDto(cityId, "Tokyo")
+		));
+		var exCity = org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.BadRequestException.class,
+				() -> submissionService.saveSubmission(code, badCity)
+		);
+		org.junit.jupiter.api.Assertions.assertTrue(exCity.getMessage().contains("Selected option 'Tokyo' for 'City' is invalid"));
+
+		// 6. Successful submission
+		com.dynamicform.api.dto.FormSubmissionDto validSub = new com.dynamicform.api.dto.FormSubmissionDto();
+		validSub.setResponses(java.util.List.of(
+				new com.dynamicform.api.dto.FormResponseDto(nameId, "Jane Doe"),
+				new com.dynamicform.api.dto.FormResponseDto(ageId, 28),
+				new com.dynamicform.api.dto.FormResponseDto(cityId, "NYC")
+		));
+		com.dynamicform.api.dto.FormSubmissionDto savedSub = submissionService.saveSubmission(code, validSub);
+		org.junit.jupiter.api.Assertions.assertNotNull(savedSub.getId());
+		org.junit.jupiter.api.Assertions.assertEquals(createdForm.getId(), savedSub.getFormId());
+		org.junit.jupiter.api.Assertions.assertEquals(3, savedSub.getResponses().size());
+
+		// 7. Retrieve submissions & count
+		List<com.dynamicform.api.dto.FormSubmissionDto> list = submissionService.getSubmissions(createdForm.getId());
+		org.junit.jupiter.api.Assertions.assertEquals(1, list.size());
+		org.junit.jupiter.api.Assertions.assertEquals(savedSub.getId(), list.get(0).getId());
+
+		var single = submissionService.getSubmissionById(createdForm.getId(), savedSub.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(single.isPresent());
+		org.junit.jupiter.api.Assertions.assertEquals(savedSub.getId(), single.get().getId());
+
+		// 8. Delete submission
+		boolean deleted = submissionService.deleteSubmission(createdForm.getId(), savedSub.getId());
+		org.junit.jupiter.api.Assertions.assertTrue(deleted);
+		org.junit.jupiter.api.Assertions.assertTrue(submissionService.getSubmissions(createdForm.getId()).isEmpty());
+
+		// 9. Clean up test form
+		formService.deleteForm(createdForm.getId());
 	}
 }

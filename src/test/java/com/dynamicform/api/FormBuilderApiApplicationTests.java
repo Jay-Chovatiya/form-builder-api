@@ -31,6 +31,9 @@ class FormBuilderApiApplicationTests {
 	@Autowired
 	private com.dynamicform.api.service.SubmissionService submissionService;
 
+	@Autowired
+	private com.dynamicform.api.service.FileStorageService fileStorageService;
+
 	@Test
 	void contextLoads() {
 		List<com.dynamicform.api.entity.UserEntity> users = userRepository.findAll();
@@ -480,5 +483,84 @@ class FormBuilderApiApplicationTests {
 
 		// 9. Clean up test form
 		formService.deleteForm(createdForm.getId());
+	}
+
+	@Test
+	void testFileUploadLifecycleAndValidation() {
+		String code = "file_test_" + System.currentTimeMillis();
+		com.dynamicform.api.dto.FormDto form = new com.dynamicform.api.dto.FormDto();
+		form.setName("File Upload Test Form");
+		form.setCode(code);
+		form.setDescription("Testing file uploads");
+		form.setStatus(com.dynamicform.api.entity.FormStatus.Draft);
+
+		com.dynamicform.api.dto.FormSectionDto sec = new com.dynamicform.api.dto.FormSectionDto();
+		sec.setTitle("Attachments");
+
+		com.dynamicform.api.dto.FormFieldDto fileField = new com.dynamicform.api.dto.FormFieldDto();
+		fileField.setName("resume");
+		fileField.setType("File");
+		fileField.setLabel("Resume Document");
+		fileField.setMaxSizeInBytes(500000);
+		fileField.setAllowedTypes(java.util.List.of(
+				new com.dynamicform.api.dto.FileTypeConfigDto(".pdf", "application/pdf")
+		));
+
+		sec.setFields(new java.util.ArrayList<>(java.util.List.of(fileField)));
+		form.setSections(new java.util.ArrayList<>(java.util.List.of(sec)));
+
+		com.dynamicform.api.dto.FormDto created = formService.createForm(form);
+		formService.publishForm(created.getId());
+
+		// 1. Invalid file extension (.txt instead of .pdf)
+		org.springframework.mock.web.MockMultipartFile badExtFile =
+				new org.springframework.mock.web.MockMultipartFile("file", "test.txt", "text/plain", "hello world".getBytes());
+		org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.BadRequestException.class,
+				() -> fileStorageService.uploadFieldFile(code, "resume", badExtFile)
+		);
+
+		// 2. Disguised executable (.pdf extension with MZ binary header)
+		byte[] fakePdfExe = new byte[]{(byte) 0x4D, (byte) 0x5A, 0x00, 0x00, 0x00};
+		org.springframework.mock.web.MockMultipartFile fakeFile =
+				new org.springframework.mock.web.MockMultipartFile("file", "fake.pdf", "application/pdf", fakePdfExe);
+		org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.BadRequestException.class,
+				() -> fileStorageService.uploadFieldFile(code, "resume", fakeFile)
+		);
+
+		// 3. Valid PDF with %PDF header
+		byte[] validPdfBytes = new byte[]{0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34, 0x0A, 0x25};
+		org.springframework.mock.web.MockMultipartFile validPdf =
+				new org.springframework.mock.web.MockMultipartFile("file", "my_resume.pdf", "application/pdf", validPdfBytes);
+
+		String fileUrl = fileStorageService.uploadFieldFile(code, "resume", validPdf);
+		org.junit.jupiter.api.Assertions.assertNotNull(fileUrl);
+		org.junit.jupiter.api.Assertions.assertTrue(fileUrl.startsWith("/api/forms/" + code + "/files/"));
+
+		String fileName = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
+		org.springframework.core.io.Resource resource = fileStorageService.loadFileAsResource(code, fileName);
+		org.junit.jupiter.api.Assertions.assertTrue(resource.exists());
+
+		// 4. Submit form referencing the uploaded file
+		Long fieldId = formService.getFormWithDetails(created.getId(), false).get()
+				.getSections().get(0).getFields().get(0).getId();
+
+		com.dynamicform.api.dto.FormSubmissionDto sub = new com.dynamicform.api.dto.FormSubmissionDto();
+		sub.setResponses(java.util.List.of(
+				new com.dynamicform.api.dto.FormResponseDto(fieldId, fileUrl)
+		));
+		com.dynamicform.api.dto.FormSubmissionDto savedSub = submissionService.saveSubmission(code, sub);
+		org.junit.jupiter.api.Assertions.assertNotNull(savedSub.getId());
+
+		// 5. Delete submission -> should delete the uploaded file on disk
+		submissionService.deleteSubmission(created.getId(), savedSub.getId());
+		org.junit.jupiter.api.Assertions.assertThrows(
+				com.dynamicform.api.common.exception.ResourceNotFoundException.class,
+				() -> fileStorageService.loadFileAsResource(code, fileName)
+		);
+
+		// Clean up
+		formService.deleteForm(created.getId());
 	}
 }

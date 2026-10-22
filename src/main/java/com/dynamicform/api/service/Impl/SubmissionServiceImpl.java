@@ -8,6 +8,7 @@ import com.dynamicform.api.entity.*;
 import com.dynamicform.api.mapper.FormSubmissionMapper;
 import com.dynamicform.api.repository.FormRepository;
 import com.dynamicform.api.repository.FormSubmissionRepository;
+import com.dynamicform.api.service.FileStorageService;
 import com.dynamicform.api.service.SubmissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,6 +29,7 @@ public class SubmissionServiceImpl implements SubmissionService {
     private final FormRepository formRepository;
     private final FormSubmissionRepository formSubmissionRepository;
     private final FormSubmissionMapper formSubmissionMapper;
+    private final FileStorageService fileStorageService;
 
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
@@ -123,6 +125,27 @@ public class SubmissionServiceImpl implements SubmissionService {
                 .orElse(null);
         if (submission == null) {
             return false;
+        }
+
+        // Clean up any uploaded files from disk for this submission
+        if (submission.getForm() != null && submission.getResponses() != null) {
+            String formCode = submission.getForm().getCode();
+            Set<Long> fileFieldIds = submission.getForm().getSections().stream()
+                    .flatMap(s -> s.getFields().stream())
+                    .filter(f -> "File".equalsIgnoreCase(f.getType()))
+                    .map(FormFieldEntity::getId)
+                    .collect(Collectors.toSet());
+
+            for (FormResponseEntity resp : submission.getResponses()) {
+                if (fileFieldIds.contains(resp.getFieldId()) && resp.getValueJson() != null) {
+                    List<String> fileUrls = parseFileUrls(resp.getValueJson());
+                    for (String url : fileUrls) {
+                        int lastSlash = url.lastIndexOf('/');
+                        String fileName = lastSlash >= 0 ? url.substring(lastSlash + 1) : url;
+                        fileStorageService.removeFile(formCode, fileName);
+                    }
+                }
+            }
         }
 
         formSubmissionRepository.delete(submission);
@@ -241,6 +264,49 @@ public class SubmissionServiceImpl implements SubmissionService {
                     }
                 }
             }
+
+            // 4. File field restriction validation
+            if ("File".equalsIgnoreCase(field.getType())) {
+                if (field.getAllowedTypes() == null || field.getAllowedTypes().isEmpty()) {
+                    throw new BadRequestException(String.format("Field '%s' does not permit file uploads because no allowed types are configured.", field.getLabel()));
+                }
+
+                Set<String> allowedExtensions = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+                field.getAllowedTypes().forEach(at -> allowedExtensions.add(at.getExtension().trim()));
+
+                List<String> fileUrls = parseFileUrls(responseStr);
+                for (String fileUrl : fileUrls) {
+                    int dot = fileUrl.lastIndexOf('.');
+                    String fileExt = dot >= 0 ? fileUrl.substring(dot).toLowerCase() : "";
+                    if (!allowedExtensions.contains(fileExt)) {
+                        throw new BadRequestException(String.format("Uploaded file format '%s' for '%s' is not allowed.", fileExt, field.getLabel()));
+                    }
+                }
+            }
         }
+    }
+
+    private static List<String> parseFileUrls(String jsonOrUrl) {
+        if (jsonOrUrl == null || jsonOrUrl.isBlank()) {
+            return Collections.emptyList();
+        }
+        String trimmed = jsonOrUrl.trim();
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(trimmed);
+                List<String> urls = new ArrayList<>();
+                for (com.fasterxml.jackson.databind.JsonNode elem : node) {
+                    if (elem.isTextual()) {
+                        urls.add(elem.asText());
+                    } else if (elem.has("fileUrl")) {
+                        urls.add(elem.get("fileUrl").asText());
+                    }
+                }
+                return urls;
+            } catch (Exception e) {
+                return List.of(trimmed);
+            }
+        }
+        return List.of(trimmed);
     }
 }

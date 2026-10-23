@@ -1,17 +1,26 @@
 package com.dynamicform.api.common.validation;
 
+import com.dynamicform.api.common.constant.FileSecurityConstants;
 import com.dynamicform.api.dto.FormFieldDto;
 import com.dynamicform.api.dto.FileTypeConfigDto;
 import com.dynamicform.api.dto.FieldValidationDto;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.util.unit.DataSize;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.Set;
 import java.util.TreeSet;
 
+@Component
 public class FormFieldValidator implements ConstraintValidator<FormFieldValid, FormFieldDto> {
+
+    @Value("${spring.servlet.multipart.max-file-size}")
+    private DataSize maxFileSize = DataSize.ofMegabytes(20);
 
     @Override
     public boolean isValid(FormFieldDto dto, ConstraintValidatorContext context) {
@@ -44,8 +53,46 @@ public class FormFieldValidator implements ConstraintValidator<FormFieldValid, F
                                     .addPropertyNode("allowedTypes")
                                     .addConstraintViolation();
                         }
+
+                        // Security limitation: Prohibit dangerous executable/script extensions
+                        if (FileSecurityConstants.DANGEROUS_EXTENSIONS.contains(ext)) {
+                            valid = false;
+                            context.buildConstraintViolationWithTemplate(
+                                            String.format(
+                                                    "File extension '%s' for field '%s' is prohibited for security reasons.",
+                                                    ext, fieldDisplayName))
+                                    .addPropertyNode("allowedTypes")
+                                    .addConstraintViolation();
+                        }
+                    }
+
+                    // Security limitation: Prohibit dangerous executable/HTML MIME types
+                    if (ft.getMimeType() != null && !ft.getMimeType().isBlank()) {
+                        String mime = ft.getMimeType().trim();
+                        if (FileSecurityConstants.DANGEROUS_MIME_TYPES.contains(mime)) {
+                            valid = false;
+                            context.buildConstraintViolationWithTemplate(
+                                            String.format(
+                                                    "MIME type '%s' for field '%s' is prohibited for security reasons.",
+                                                    mime, fieldDisplayName))
+                                    .addPropertyNode("allowedTypes")
+                                    .addConstraintViolation();
+                        }
                     }
                 }
+            }
+
+            // Security limitation: Max size cannot exceed server limits from application.properties
+            long maxServerBytes = maxFileSize != null ? maxFileSize.toBytes() : 20L * 1024L * 1024L;
+            long maxServerMb = maxFileSize != null ? maxFileSize.toMegabytes() : 20L;
+            if (dto.getMaxSizeInBytes() > maxServerBytes) {
+                valid = false;
+                context.buildConstraintViolationWithTemplate(
+                                String.format(
+                                        "Field '%s' max file size (%d bytes) cannot exceed server upload limit of %d MB (%d bytes).",
+                                        fieldDisplayName, dto.getMaxSizeInBytes(), maxServerMb, maxServerBytes))
+                        .addPropertyNode("maxSizeInBytes")
+                        .addConstraintViolation();
             }
         }
 

@@ -1,5 +1,6 @@
 package com.dynamicform.api.controller;
 
+import com.dynamicform.api.common.ratelimit.RateLimit;
 import com.dynamicform.api.common.exception.ResourceNotFoundException;
 import com.dynamicform.api.common.response.ApiResponse;
 import com.dynamicform.api.dto.FormSubmissionDto;
@@ -44,6 +45,7 @@ public class SubmissionController {
     }
 
     @PostMapping("/code/{code}/submissions")
+    @RateLimit("submission")
     public ResponseEntity<ApiResponse<FormSubmissionDto>> submitForm(
             @PathVariable String code,
             @Valid @RequestBody FormSubmissionDto dto) {
@@ -55,6 +57,7 @@ public class SubmissionController {
     }
 
     @PostMapping("/{code}/upload")
+    @RateLimit("upload")
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadFile(
             @PathVariable String code,
             @RequestParam("file") MultipartFile file,

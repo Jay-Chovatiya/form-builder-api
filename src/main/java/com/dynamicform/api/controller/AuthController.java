@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.dynamicform.api.common.ratelimit.RateLimit;
 import com.dynamicform.api.common.response.ApiResponse;
 import com.dynamicform.api.config.JwtProperties;
 import com.dynamicform.api.dto.AuthResponseDto;
@@ -33,6 +34,7 @@ public class AuthController {
     private final String REFRESH_COOKIE_NAME = "refreshToken";
 
     @PostMapping("/login")
+    @RateLimit("login")
     public ResponseEntity<ApiResponse<AuthResponseDto>> login(
             @Valid @RequestBody LoginDto request,
             HttpServletResponse httpServletResponse) {

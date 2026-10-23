@@ -1,6 +1,7 @@
 package com.dynamicform.api.common.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -85,6 +86,21 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitExceededException(
+            RateLimitExceededException ex, HttpServletResponse response) {
+        response.setHeader("Retry-After", String.valueOf(ex.getRetryAfterSeconds()));
+        response.setHeader("X-RateLimit-Limit", String.valueOf(ex.getLimit()));
+        response.setHeader("X-RateLimit-Remaining", "0");
+
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.TOO_MANY_REQUESTS.value(),
+                "Too many requests. Please try again later.",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.TOO_MANY_REQUESTS);
     }
 
     @ExceptionHandler(Exception.class)

@@ -1,6 +1,7 @@
 package com.dynamicform.api.service.impl;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.dynamicform.api.common.exception.BadRequestException;
+import com.dynamicform.api.config.securityConfiguration.SecurityUtils;
 import com.dynamicform.api.dto.UserDto;
 import com.dynamicform.api.entity.UserEntity;
 import com.dynamicform.api.mapper.UserMapper;
@@ -79,6 +81,10 @@ public class UserServiceImpl implements UserService {
         user.setFullName(dto.getFullName() != null ? dto.getFullName().trim() : null);
 
         if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
+            Long currentUserId = SecurityUtils.getCurrentUserId().orElse(null);
+            if (currentUserId != null && !Objects.equals(id, currentUserId)) {
+                throw new BadRequestException("You are only allowed to update your own password.");
+            }
             user.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         }
 

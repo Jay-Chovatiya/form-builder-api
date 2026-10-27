@@ -563,4 +563,53 @@ class FormBuilderApiApplicationTests {
 		// Clean up
 		formService.deleteForm(created.getId());
 	}
+
+	@Test
+	void testPasswordUpdatePermissionsBasedOnAuthenticatedUser() {
+		String suffix = String.valueOf(System.currentTimeMillis() % 100000);
+		com.dynamicform.api.dto.UserDto userDto1 = new com.dynamicform.api.dto.UserDto();
+		userDto1.setUsername("usr_a_" + suffix);
+		userDto1.setEmail("usra_" + suffix + "@test.com");
+		userDto1.setPassword("Pass123");
+		userDto1.setFullName("User Alpha");
+		userDto1.setRole(com.dynamicform.api.entity.Role.Administrator);
+		com.dynamicform.api.dto.UserDto userA = userService.createUser(userDto1);
+
+		com.dynamicform.api.dto.UserDto userDto2 = new com.dynamicform.api.dto.UserDto();
+		userDto2.setUsername("usr_b_" + suffix);
+		userDto2.setEmail("usrb_" + suffix + "@test.com");
+		userDto2.setPassword("Pass123");
+		userDto2.setFullName("User Beta");
+		userDto2.setRole(com.dynamicform.api.entity.Role.Administrator);
+		com.dynamicform.api.dto.UserDto userB = userService.createUser(userDto2);
+
+		try {
+			com.dynamicform.api.entity.UserEntity principalA = new com.dynamicform.api.entity.UserEntity();
+			principalA.setId(userA.getId());
+			org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+					new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+							principalA, null, java.util.Collections.emptyList())
+			);
+
+			userA.setPassword("NewPass1");
+			Optional<com.dynamicform.api.dto.UserDto> updatedSelf = userService.updateUser(userA.getId(), userA);
+			org.junit.jupiter.api.Assertions.assertTrue(updatedSelf.isPresent());
+
+			userB.setPassword("Hacked1");
+			org.junit.jupiter.api.Assertions.assertThrows(
+					com.dynamicform.api.common.exception.BadRequestException.class,
+					() -> userService.updateUser(userB.getId(), userB)
+			);
+
+			userB.setPassword("");
+			userB.setFullName("User Beta Renamed");
+			Optional<com.dynamicform.api.dto.UserDto> updatedB = userService.updateUser(userB.getId(), userB);
+			org.junit.jupiter.api.Assertions.assertTrue(updatedB.isPresent());
+			org.junit.jupiter.api.Assertions.assertEquals("User Beta Renamed", updatedB.get().getFullName());
+		} finally {
+			org.springframework.security.core.context.SecurityContextHolder.clearContext();
+			userService.deleteUser(userA.getId());
+			userService.deleteUser(userB.getId());
+		}
+	}
 }

@@ -13,6 +13,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -33,10 +34,24 @@ public class SecurityConfig {
     private String CORS_URLS;
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            SpaCsrfTokenRequestHandler spaCsrfTokenRequestHandler) throws Exception {
+
+        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        tokenRepository.setCookiePath("/");
+        tokenRepository.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(tokenRepository)
+                        .csrfTokenRequestHandler(spaCsrfTokenRequestHandler)
+                        .ignoringRequestMatchers(
+                                "/api/auth/login",
+                                "/api/forms/code/**",
+                                "/api/forms/*/upload"
+                        ))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((request, response, authException) -> {
@@ -54,7 +69,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/**").hasRole(Role.SuperAdministrator.name())
                         .requestMatchers("/api/forms/**").hasAnyRole(Role.Administrator.name(), Role.SuperAdministrator.name())
                         .anyRequest().authenticated())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new CsrfCookieFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -78,7 +94,7 @@ public class SecurityConfig {
         corsConfiguration.setAllowedOrigins(origins);
         corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         corsConfiguration.setAllowedHeaders(List.of("*"));
-        corsConfiguration.setExposedHeaders(List.of("Authorization", "Set-Cookie"));
+        corsConfiguration.setExposedHeaders(List.of("Authorization", "Set-Cookie", "X-XSRF-TOKEN"));
         corsConfiguration.setAllowCredentials(true);
         corsConfiguration.setMaxAge(3600L);
 

@@ -22,7 +22,7 @@ public class UserDto {
     private Long id;
 
     @NotBlank(message = "Username is required.")
-    @Size(min = 3, max = 100, message = "Username must be between 3 and 100 characters.")
+    @Size(min = 3, max = 10, message = "Username must be between 3 and 100 characters.")
     @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_]*$", message = "Username must start with a letter and contain only alphanumeric characters and underscores.")
     private String username;
 
@@ -30,8 +30,7 @@ public class UserDto {
     @Email(message = "Invalid email address format.")
     private String email;
 
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @Size(min = 6, max = 100, message = "Password must be at least 6 characters.")
+    @Size(min = 6, max = 10, message = "Password must be at least 6 characters.")
     private String password;
 
     @NotBlank(message = "Full name is required.")

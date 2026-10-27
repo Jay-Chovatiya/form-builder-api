@@ -2,6 +2,7 @@ package com.dynamicform.api.controller;
 
 import java.time.Duration;
 
+
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -85,7 +86,18 @@ public class AuthController {
         }
 
         deleteRefreshTokenCookie(httpServletResponse);
+        deleteXsrfCookie(httpServletResponse);
         return ResponseEntity.ok(ApiResponse.ok(null, "Token revoked successfully"));
+    }
+
+    private void deleteXsrfCookie(HttpServletResponse response) {
+        ResponseCookie clearCookie = ResponseCookie.from("XSRF-TOKEN", "")
+                .httpOnly(false)
+                .path("/")
+                .maxAge(Duration.ZERO)
+                .sameSite("Lax")
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, clearCookie.toString());
     }
 
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken, boolean rememberMe) {

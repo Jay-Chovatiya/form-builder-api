@@ -94,7 +94,7 @@ public class RateLimiterService {
 
         if (config == null || config.getLimit() <= 0) {
             RateLimiterProperties.PolicyConfig fallback = new RateLimiterProperties.PolicyConfig();
-            fallback.setLimit(60);
+            fallback.setLimit(10);
             fallback.setWindowSeconds(60);
             return fallback;
         }

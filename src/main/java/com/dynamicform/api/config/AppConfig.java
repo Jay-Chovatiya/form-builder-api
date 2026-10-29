@@ -4,10 +4,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
-import org.springframework.security.web.csrf.XorCsrfTokenRequestAttributeHandler;
-
-import com.dynamicform.api.config.securityConfiguration.SpaCsrfTokenRequestHandler;
 
 @Configuration
 public class AppConfig {
@@ -18,12 +17,17 @@ public class AppConfig {
     }
 
     @Bean
-    public CsrfTokenRequestHandler xorCsrfTokenRequestHandler() {
-        return new XorCsrfTokenRequestAttributeHandler();
+    public CookieCsrfTokenRepository cookieCsrfTokenRepository() {
+        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        tokenRepository.setCookiePath("/");
+        tokenRepository.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+        return tokenRepository;
     }
 
     @Bean
-    public SpaCsrfTokenRequestHandler spaCsrfTokenRequestHandler(CsrfTokenRequestHandler xorCsrfTokenRequestHandler) {
-        return new SpaCsrfTokenRequestHandler(xorCsrfTokenRequestHandler);
+    public CsrfTokenRequestHandler csrfTokenRequestHandler() {
+        CsrfTokenRequestAttributeHandler requestHandler = new CsrfTokenRequestAttributeHandler();
+        requestHandler.setCsrfRequestAttributeName(null);
+        return requestHandler;
     }
 }

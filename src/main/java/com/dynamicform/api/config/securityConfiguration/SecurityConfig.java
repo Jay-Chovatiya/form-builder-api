@@ -14,6 +14,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfException;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -36,17 +38,14 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            SpaCsrfTokenRequestHandler spaCsrfTokenRequestHandler) throws Exception {
-
-        CookieCsrfTokenRepository tokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        tokenRepository.setCookiePath("/");
-        tokenRepository.setCookieCustomizer(cookie -> cookie.sameSite("Lax"));
+            CookieCsrfTokenRepository cookieCsrfTokenRepository,
+            CsrfTokenRequestHandler csrfTokenRequestHandler) throws Exception {
 
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf
-                        .csrfTokenRepository(tokenRepository)
-                        .csrfTokenRequestHandler(spaCsrfTokenRequestHandler)
+                        .csrfTokenRepository(cookieCsrfTokenRepository)
+                        .csrfTokenRequestHandler(csrfTokenRequestHandler)
                         .ignoringRequestMatchers(
                                 "/api/auth/login",
                                 "/api/forms/code/**",
@@ -59,6 +58,15 @@ public class SecurityConfig {
                             response.setContentType("application/json");
                             response.getWriter().write(
                                     "{\"statusCode\":401,\"message\":\"Unauthorized: Access token expired or invalid\"}");
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            String message = (accessDeniedException instanceof CsrfException)
+                                    ? "Invalid or missing CSRF token. Please retry."
+                                    : "Forbidden: You do not have permission to access this resource.";
+                            response.getWriter().write(
+                                    "{\"statusCode\":403,\"message\":\"" + message + "\"}");
                         }))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
@@ -67,6 +75,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/forms/*/upload").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/forms/*/files/**").permitAll()
                         .requestMatchers("/api/users/**").hasRole(Role.SuperAdministrator.name())
+                        .requestMatchers(HttpMethod.PUT, "/api/users/{id}").hasAnyRole(Role.Administrator.name(), Role.SuperAdministrator.name())
                         .requestMatchers("/api/forms/**").hasAnyRole(Role.Administrator.name(), Role.SuperAdministrator.name())
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
